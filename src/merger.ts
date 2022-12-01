@@ -14,8 +14,7 @@ export interface Inputs {
   ignoreLabelsStrategy: labelStrategies
   failStep: boolean
   intervalSeconds: number
-  labels: string[]
-  labelsStrategy: labelStrategies
+  title: string
   repo: string
   owner: string
   pullRequestNumber: number
@@ -42,92 +41,21 @@ export class Merger {
       .failStep(this.cfg.failStep)
   }
 
-  private isAllLabelsValid(
+  private isCrowdinPull(
     pr: PullsGetResponseData,
-    labels: string[],
-    type: 'labels' | 'ignoreLabels'
+    title: string
   ): ValidationResult {
-    const hasLabels = pr.labels
-      .filter(prLabel => {
-        return labels.includes(prLabel.name)
-      })
-      .map(label => label.name)
-
     let failed = true
-    if (type === 'labels' && hasLabels.length === labels.length) {
+    if (pr.title.includes(title)) {
       failed = false
     }
-    if (type === 'ignoreLabels' && !hasLabels.length) {
-      failed = false
-    }
-
-    core.debug(
-      `Checking all labels for type:${type} and prLabels:${inspect(
-        pr.labels.map(l => l.name)
-      )}, hasLabels:${inspect(hasLabels)}, labels:${inspect(
-        labels
-      )} and failed: ${failed}`
-    )
 
     return {
       failed,
-      message: `PR ${pr.id} ${
-        type === 'labels' ? '' : "does't"
-      } contains all ${inspect(labels)} for PR labels ${inspect(
-        pr.labels.map(l => l.name)
-      )} and and failed: ${failed}`
-    }
-  }
-
-  private isAtLeastOneLabelsValid(
-    pr: PullsGetResponseData,
-    labels: string[],
-    type: 'labels' | 'ignoreLabels'
-  ): ValidationResult {
-    const hasLabels = pr.labels
-      .filter(prLabel => {
-        return labels.includes(prLabel.name)
-      })
-      .map(label => label.name)
-
-    let failed = true
-    if (type === 'labels' && hasLabels.length) {
-      failed = false
-    }
-    if (type === 'ignoreLabels' && !hasLabels.length) {
-      failed = false
-    }
-
-    core.debug(
-      `Checking atLeastOne labels for type:${type} and prLabels:${inspect(
-        pr.labels.map(l => l.name)
-      )}, hasLabels:${inspect(hasLabels)}, labels:${inspect(
-        labels
-      )} and failed: ${failed}`
-    )
-
-    return {
-      failed,
-      message: `PR ${pr.id} ${
-        type === 'labels' ? '' : "does't"
-      } contains ${inspect(labels)} for PR labels ${inspect(
-        pr.labels.map(l => l.name)
-      )}`
-    }
-  }
-
-  private isLabelsValid(
-    pr: PullsGetResponseData,
-    labels: string[],
-    strategy: labelStrategies,
-    type: 'labels' | 'ignoreLabels'
-  ): ValidationResult {
-    switch (strategy) {
-      case 'atLeastOne':
-        return this.isAtLeastOneLabelsValid(pr, labels, type)
-      case 'all':
-      default:
-        return this.isAllLabelsValid(pr, labels, type)
+      message: `The title of the PR with id ${pr.id} ${
+        failed ? 'does not contain' : 'contains'
+      } the proper title to be
+        automatically merged`
     }
   }
 
@@ -145,48 +73,10 @@ export class Merger {
               pull_number: this.cfg.pullRequestNumber
             })
 
-            if (this.cfg.labels.length) {
-              const labelResult = this.isLabelsValid(
-                pr,
-                this.cfg.labels,
-                this.cfg.labelsStrategy,
-                'labels'
-              )
-              if (labelResult.failed) {
-                throw new Error(`Checked labels failed: ${labelResult.message}`)
-              }
+            const titleResult = this.isCrowdinPull(pr, this.cfg.title)
 
-              core.debug(
-                `Checked labels and passed with message:${labelResult.message} with ${this.cfg.labelsStrategy}`
-              )
-              core.info(
-                `Checked labels and passed with labels:${inspect(
-                  this.cfg.labels
-                )}`
-              )
-            }
-
-            if (this.cfg.ignoreLabels.length) {
-              const ignoreLabelResult = this.isLabelsValid(
-                pr,
-                this.cfg.ignoreLabels,
-                this.cfg.ignoreLabelsStrategy,
-                'ignoreLabels'
-              )
-              if (ignoreLabelResult.failed) {
-                throw new Error(
-                  `Checked ignore labels failed: ${ignoreLabelResult.message}`
-                )
-              }
-
-              core.debug(
-                `Checked ignore labels and passed with message:${ignoreLabelResult.message} with ${this.cfg.ignoreLabelsStrategy} strategy`
-              )
-              core.info(
-                `Checked ignore labels and passed with ignoreLabels:${inspect(
-                  this.cfg.ignoreLabels
-                )}`
-              )
+            if (titleResult.failed) {
+              throw new Error(`Title checking failed: ${titleResult.message}`)
             }
 
             if (this.cfg.checkStatus) {
@@ -205,7 +95,7 @@ export class Merger {
 
               if (totalStatus - 1 !== totalSuccessStatuses) {
                 throw new Error(
-                  `Not all status success, ${totalSuccessStatuses} out of ${
+                  `Not all status succeeded, ${totalSuccessStatuses} out of ${
                     totalStatus - 1
                   } (ignored this check) success`
                 )
@@ -215,7 +105,9 @@ export class Merger {
               core.debug(`Merge PR ${pr.number}`)
             }
           } catch (err) {
-            core.debug(`failed retry count:${count} with error ${inspect(err)}`)
+            core.debug(
+              `Failed, retry count:${count} with error ${inspect(err)}`
+            )
             throw err
           }
         }
@@ -229,7 +121,7 @@ export class Merger {
           body: this.cfg.comment
         })
 
-        core.debug(`Post comment ${inspect(this.cfg.comment)}`)
+        core.debug(`Posting comment ${inspect(this.cfg.comment)}`)
         core.setOutput(`commentID`, resp.id)
       }
 
@@ -238,7 +130,7 @@ export class Merger {
           owner,
           repo,
           pull_number: this.cfg.pullRequestNumber,
-          merge_method: this.cfg.strategy
+          merge_method: 'squash'
         })
         core.setOutput('merged', true)
       } else {
@@ -246,11 +138,13 @@ export class Merger {
         core.setOutput('merged', false)
       }
     } catch (err) {
-      core.debug(`Error on retry error:${inspect(err)}`)
+      core.debug(`Error on retry:${inspect(err)}`)
       if (this.cfg.failStep) {
         throw err
       }
-      core.debug('timeout but passing because "failStep" is configure to false')
+      core.debug(
+        'Timed out but passed because "failStep" is configured to false'
+      )
     }
   }
 }

@@ -18,11 +18,7 @@ async function run(): Promise<void> {
       failStep: core.getInput('failStep') === 'true',
       intervalSeconds:
         Number(core.getInput('intervalSeconds', {required: true})) * 1000,
-      labels:
-        core.getInput('labels') === ''
-          ? []
-          : core.getInput('labels').split(','),
-      labelsStrategy: core.getInput('labelsStrategy') as labelStrategies,
+      title: core.getInput('title', {required: true}),
       owner,
       repo,
       pullRequestNumber: Number(

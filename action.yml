@@ -1,8 +1,8 @@
-name: 'auto-pull-request-merge'
-description: 'Auto PR Merge'
-author: 'KeisukeYamashita'
+name: 'auto-crowdin-pull-request-merge'
+description: 'Action to automatically merge liferay crowdin pull requests'
+author: 'KeisukeYamashita, modified by Will Newbury'
 inputs:
-  checkStatus: 
+  checkStatus:
     required: false
     description: 'Check all status before merge'
     default: 'true'
@@ -22,22 +22,10 @@ inputs:
     required: false
     description: 'Fail the step if the PR is not found or merged'
     default: 'true'
-  labels:
-    required: false
-    description: 'Comma seperated labes that target pull request should have'
-    default: ''
-  labelsStrategy:
-    required: false
-    description: 'Check condition on how to check the labels'
-    default : 'all'
-  ignoreLabels:
-    required: false
-    description: 'Comma seperated labes that target pull request should not have'
-    default: ''
-  ignoreLabelsStrategy:
-    required: false
-    description: 'Check condition on how to check the labels'
-    default: 'all'
+  title:
+    required: true
+    description: 'string that the pr title should contain'
+    default: 'New Crowdin updates'
   repository:
     required: false
     description: 'The GitHub repository containing the issue or pr.'
